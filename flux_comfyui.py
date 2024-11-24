@@ -3,28 +3,25 @@ import subprocess
 
 # CUDA 기반 환경 설정 및 모델 파일 다운로드
 image = (
-    modal.Image.debian_slim( python_version="3.12.7" ) # 가벼운 Debian Linux 이미지를 기반으로 설정
-    .apt_install("git", "wget")  # git과 wget 설치
-    # .pip_install("fastapi[standard]==0.115.4")  # install web dependencies
-    .pip_install("comfy-cli==1.2.3")  # comfy-cli 설치
+    modal.Image.debian_slim(python_version="3.12.7")
+    .apt_install("git", "wget")
+    .pip_install("fastapi[standard]==0.115.4")
+    .pip_install("comfy-cli==1.2.3")
     .run_commands(
-            "comfy --skip-prompt install --nvidia"
-        )
-)
-
-image = (
-    image.run_commands(
-            "comfy --skip-prompt model download --url https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/flux1-dev.safetensors --relative-path models/unet --set-civitai-api-token=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"
-        )
+        "comfy --skip-prompt install --nvidia"
+    )
     .run_commands(
-            "comfy --skip-prompt model download --url https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/ae.safetensors --relative-path models/vae"
-        )
+        "comfy --skip-prompt model download --url https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/flux1-dev.safetensors --relative-path models/unet --set-civitai-api-token=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"
+    )
     .run_commands(
-            "comfy --skip-prompt model download --url https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors --relative-path models/clip"
-        )
+        "comfy --skip-prompt model download --url https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/ae.safetensors --relative-path models/vae"
+    )
     .run_commands(
-            "comfy --skip-prompt model download --url https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors --relative-path models/clip"
-        )
+        "comfy --skip-prompt model download --url https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors --relative-path models/clip"
+    )
+    .run_commands(
+        "comfy --skip-prompt model download --url https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors --relative-path models/clip"
+    )
 )
 
 # Modal 앱 생성
