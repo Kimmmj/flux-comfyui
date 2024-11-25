@@ -1,31 +1,64 @@
-import modal  # modal 모듈 임포트 추가
+import json
 import subprocess
+import uuid
+from pathlib import Path
+from typing import Dict
 
-# CUDA 기반 환경 설정 및 모델 파일 다운로드
+import modal
+
+
+# 기본 환경 설정
 image = (
     modal.Image.debian_slim(python_version="3.12.7")
-    .apt_install("git", "wget")
+    .apt_install("git")
     .pip_install("fastapi[standard]==0.115.4")
-    .pip_install("comfy-cli==1.2.3")
-    .run_commands(
-        "comfy --skip-prompt install --nvidia"
-    )
-    .run_commands(
-        "comfy --skip-prompt model download --url https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/flux1-dev.safetensors --relative-path models/unet --set-civitai-api-token=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"
-    )
-    .run_commands(
-        "comfy --skip-prompt model download --url https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/ae.safetensors --relative-path models/vae"
-    )
-    .run_commands(
-        "comfy --skip-prompt model download --url https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors --relative-path models/clip"
-    )
-    .run_commands(
-        "comfy --skip-prompt model download --url https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors --relative-path models/clip"
-    )
+    .pip_install("comfy-cli==1.2.7")
+    .run_commands("comfy --skip-prompt install --nvidia")
+)
+
+# 커스텀 노드 설치
+image = (
+    image.run_commands("comfy node install was-node-suite-comfyui")
+)
+
+# 모델 다운로드 준비
+image = (
+    image.pip_install("huggingface_hub[hf_transfer]==0.26.2")
+    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})
+    .run_commands(  # needs to be empty for Volume mount to work
+        "rm -rf /root/comfy/ComfyUI/models")
 )
 
 # Modal 앱 생성
 app = modal.App(name="flux_comfyui_app", image=image)
+
+# 모델 저장을 위한 볼륨 설정
+vol = modal.Volume.from_name("comfyui-models", create_if_missing=True)
+
+# 모델 다운로드 함수 정의
+@app.function(
+    volumes={"/root/models": vol},
+)
+def hf_download(repo_id: str, filename: str, model_type: str):
+    from huggingface_hub import hf_hub_download
+
+    hf_hub_download(
+        repo_id=repo_id,
+        filename=filename,
+        local_dir=f"/root/models/{model_type}",
+    )
+
+
+# 모델 병렬 다운로드를 위한 엔트리포인트 설정
+@app.local_entrypoint()
+def download_models():
+    models_to_download = [
+        ("black-forest-labs/FLUX.1-dev", "ae.safetensors", "vae"),
+        ("black-forest-labs/FLUX.1-dev", "flux1-dev.safetensors", "unet"),
+        ("comfyanonymous/flux_text_encoders", "t5xxl_fp16.safetensors", "clip"),
+        ("comfyanonymous/flux_text_encoders", "clip_l.safetensors", "clip"),
+    ]
+    list(hf_download.starmap(models_to_download))
 
 @app.function(
     allow_concurrent_inputs=10,
